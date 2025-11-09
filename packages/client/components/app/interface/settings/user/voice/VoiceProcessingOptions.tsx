@@ -17,12 +17,13 @@ export function VoiceProcessingOptions() {
       <CategoryButton.Group>
         <CategoryButton
           icon="blank"
-          action={<Checkbox checked={state.voice.noiseSupression} />}
+          // Corrected to use the renamed noiseSuppression flag so toggling updates the browser's built-in noise filter.
+          action={<Checkbox checked={state.voice.noiseSuppression} />}
           onClick={() =>
-            (state.voice.noiseSupression = !state.voice.noiseSupression)
+            (state.voice.noiseSuppression = !state.voice.noiseSuppression)
           }
         >
-          <Trans>Browser Noise Supression</Trans>
+          <Trans>Browser Noise Suppression</Trans>
         </CategoryButton>
         <CategoryButton
           icon="blank"
