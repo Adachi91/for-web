@@ -7,7 +7,7 @@ export interface TypeVoice {
   preferredAudioOutputDevice?: string;
 
   echoCancellation: boolean;
-  noiseSupression: boolean;
+  noiseSuppression: boolean; // Corrected the spelling so browser APIs receive the proper noiseSuppression constraint and actually apply noise filtering.
 
   inputVolume: number;
   outputVolume: number;
@@ -41,7 +41,7 @@ export class Voice extends AbstractStore<"voice", TypeVoice> {
   default(): TypeVoice {
     return {
       echoCancellation: true,
-      noiseSupression: true,
+      noiseSuppression: true,
       inputVolume: 1.0,
       outputVolume: 1.0,
       userVolumes: {},
@@ -67,8 +67,10 @@ export class Voice extends AbstractStore<"voice", TypeVoice> {
       data.echoCancellation = input.echoCancellation;
     }
 
-    if (typeof input.noiseSupression === "boolean") {
-      data.noiseSupression = input.noiseSupression;
+    if (typeof input.noiseSuppression === "boolean") {
+      data.noiseSuppression = input.noiseSuppression; // The corrected property now flows through validation as expected.
+    } else if (typeof (input as Record<string, unknown>).noiseSupression === "boolean") {
+      data.noiseSuppression = (input as { noiseSupression: boolean }).noiseSupression; // Legacy persistence still hydrates by mapping the old key onto the new setting.
     }
 
     if (typeof input.inputVolume === "number") {
@@ -159,8 +161,15 @@ export class Voice extends AbstractStore<"voice", TypeVoice> {
   /**
    * Set noise cancellation
    */
+  set noiseSuppression(value: boolean) {
+    this.set("noiseSuppression", value); // Updating the store now propagates the correctly spelled key so downstream consumers pick up the change.
+  }
+
+  /**
+   * Backwards compatible setter for deprecated key
+   */
   set noiseSupression(value: boolean) {
-    this.set("noiseSupression", value);
+    this.noiseSuppression = value; // Redirects legacy writes to the corrected field to keep persisted settings working.
   }
 
   /**
@@ -188,7 +197,7 @@ export class Voice extends AbstractStore<"voice", TypeVoice> {
    * Get the preferred audio output device
    */
   get preferredAudioOutputDevice(): string | undefined {
-    return this.get().preferredAudioInputDevice;
+    return this.get().preferredAudioOutputDevice; // Fixed bug: previously returned the input device so the chosen output device now persists correctly.
   }
 
   /**
@@ -201,8 +210,15 @@ export class Voice extends AbstractStore<"voice", TypeVoice> {
   /**
    * Get noise supression
    */
+  get noiseSuppression(): boolean | undefined {
+    return this.get().noiseSuppression; // Consumers now read from the corrected key so the UI reflects the active processing mode.
+  }
+
+  /**
+   * Backwards compatible getter for deprecated key
+   */
   get noiseSupression(): boolean | undefined {
-    return this.get().noiseSupression;
+    return this.noiseSuppression; // Allows older code paths to keep functioning while the rest of the app migrates to the new key.
   }
 
   /**

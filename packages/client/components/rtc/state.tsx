@@ -4,12 +4,14 @@ import {
   Setter,
   batch,
   createContext,
+  createEffect,
   createSignal,
   useContext,
 } from "solid-js";
 import { RoomContext } from "solid-livekit-components";
 
 import { Room } from "livekit-client";
+import type { AudioCaptureOptions } from "livekit-client";
 import { Channel } from "stoat.js";
 
 import { useState } from "@revolt/state";
@@ -86,11 +88,7 @@ class Voice {
     this.disconnect();
 
     const room = new Room({
-      audioCaptureDefaults: {
-        deviceId: this.#settings.preferredAudioInputDevice,
-        echoCancellation: this.#settings.echoCancellation,
-        noiseSuppression: this.#settings.noiseSupression,
-      },
+      audioCaptureDefaults: this.#getAudioCaptureOptions(), // Uses the corrected capture options so LiveKit starts with our echo/noise preferences.
       audioOutput: {
         deviceId: this.#settings.preferredAudioOutputDevice,
       },
@@ -108,7 +106,7 @@ class Voice {
 
       if (this.speakingPermission)
         room.localParticipant
-          .setMicrophoneEnabled(true)
+          .setMicrophoneEnabled(true, this.#getAudioCaptureOptions()) // Passes the updated constraints so toggling settings affects the active microphone stream.
           .then((track) => this.#setMicrophone(typeof track !== "undefined"));
     });
 
@@ -184,6 +182,28 @@ class Voice {
   get speakingPermission() {
     return !!this.channel()?.havePermission("Speak");
   }
+
+  #getAudioCaptureOptions(): AudioCaptureOptions {
+    return {
+      deviceId: this.#settings.preferredAudioInputDevice,
+      echoCancellation: this.#settings.echoCancellation,
+      noiseSuppression: this.#settings.noiseSuppression,
+    }; // Centralises the constraints so every capture action stays in sync with the latest preferences.
+  }
+
+  async refreshAudioProcessing(
+    options: AudioCaptureOptions = this.#getAudioCaptureOptions(),
+  ) {
+    const room = this.room();
+    if (!room) return;
+
+    if (!room.localParticipant.isMicrophoneEnabled) return;
+
+    await room.localParticipant.setMicrophoneEnabled(
+      true,
+      options,
+    ); // Recreate the local track with the new constraints so echo cancellation and noise suppression toggle immediately.
+  }
 }
 
 const voiceContext = createContext<Voice>(null as unknown as Voice);
@@ -194,6 +214,16 @@ const voiceContext = createContext<Voice>(null as unknown as Voice);
 export function VoiceContext(props: { children: JSX.Element }) {
   const state = useState();
   const voice = new Voice(state.voice);
+
+  createEffect(() => {
+    const captureOptions: AudioCaptureOptions = {
+      deviceId: state.voice.preferredAudioInputDevice,
+      echoCancellation: state.voice.echoCancellation,
+      noiseSuppression: state.voice.noiseSuppression,
+    };
+
+    void voice.refreshAudioProcessing(captureOptions); // Reacts to preference changes by re-applying capture constraints so the browser updates processing in real-time.
+  });
 
   return (
     <voiceContext.Provider value={voice}>
